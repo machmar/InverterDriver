@@ -10,7 +10,7 @@
 
 
 #define ZAP  500 // 49.5V  70%
-#define VYP  400 // 46.0V  20%
+#define VYP  300 // 46.0V  20%
 #define MaxVyp 800 // 540 Přepěťová ochrana aktivace  
 #define MaxZap 700 // 520 Přepěťová ochrana deaktivace 
 
@@ -25,29 +25,29 @@
 bool VoltageControl(uint16_t analog);
 bool CurrentProtection(uint16_t analog);
 
+uint16_t analogPrepeti = 0;
+uint16_t analogProud = 0;
+bool stavPinu = true;
+
 void setup() {
   wdt_enable(WDTO_500MS);
   pinMode(1, OUTPUT);
 }
 
-uint16_t analogPrepeti = 0;
-uint16_t analogOchrana = 0;
-bool stavPinu = false;
-
 void loop() {
   analogPrepeti = analogRead(A2);
-  analogOchrana = analogRead(A1);
+  analogProud = analogRead(A1);
 
-  stavPinu = VoltageControl(analogPrepeti);
+  stavPinu = VoltageControl(analogPrepeti) | CurrentProtection(analogProud);
 
   digitalWrite(1, stavPinu);
 
   wdt_reset();
 }
 
-bool prepetovaOchranaAktivni = false; // Stavová proměnná pro přepěťovou ochranu
 bool VoltageControl(uint16_t analog) {
-  bool out = true;
+  static bool prepetovaOchranaAktivni = false; // Stavová proměnná pro přepěťovou ochranu
+  static bool out = true;
 
   // Kontrola přepěťové ochrany
   if (analog > MaxVyp) {
@@ -70,6 +70,79 @@ bool VoltageControl(uint16_t analog) {
   return out;
 }
 
+enum CurrentProtectionState_t {
+  STATE_START,
+  STATE_NABEH,
+  STATE_NORMAL,
+  STATE_CEKA,
+  STATE_OBNOVA,
+  STATE_PAUZA,
+  STATE_OBNOVA2,
+  STATE_CHYBA,
+  STATE_COUNT
+};
+CurrentProtectionState_t stateNow = STATE_START;
+CurrentProtectionState_t statePrev = STATE_COUNT;
+
+uint64_t timeCounter = 0;
+
 bool CurrentProtection(uint16_t analog) {
-  
+  if (stateNow != statePrev) {
+    switch (statePrev) {
+    case STATE_NORMAL:
+      timeCounter = millis();
+      break;
+      
+    case STATE_CEKA:
+      break;
+      
+    case STATE_OBNOVA:
+      if (stateNow == STATE_CEKA) {
+        
+      }
+      else if (stateNow == STATE_NORMAL) {
+        
+      }
+      break;
+      
+    case STATE_PAUZA:
+      break;
+
+    default:
+      break;
+    }
+    statePrev = stateNow;
+  }
+
+  switch (stateNow) {
+  case STATE_START:
+    break;
+
+  case STATE_NABEH:
+    break;
+    
+  case STATE_NORMAL:
+    break;
+    
+  case STATE_CEKA:
+    break;
+    
+  case STATE_OBNOVA:
+    break;
+    
+  case STATE_PAUZA:
+    break;
+    
+  case STATE_OBNOVA2:
+    break;
+    
+  case STATE_CHYBA:
+    break;
+
+  default:
+    delay(10000); // only way to get here is a glitch, reset the chip
+    break;
+  }
+
+  return false;
 }
