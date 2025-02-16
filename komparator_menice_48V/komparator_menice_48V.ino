@@ -5,8 +5,8 @@
 #define MaxVyp 800 // TESTOVACI HODNOTA JE POTREBA NASTAVIT
 #define MaxZap 700 // TESTOVACI HODNOTA JE POTREBA NASTAVIT
 
-#define PROUD_HRANICE 512 // 2.5V
-#define PROUD_HYSTEREZE 50 // 250mV
+#define VYSTUPNI_NAPETI_HRANICE 512 // 2.5V
+#define VYSTUPNI_NAPETI_HYSTEREZE 50 // 250mV
 
 #if (VYP) >= (ZAP)
 #error VYP musi byt mensi nez ZAP
@@ -17,9 +17,10 @@
 #endif
 
 bool VoltageControl(uint16_t analog);
-bool CurrentProtection(uint16_t analog);
+bool outControl(uint16_t analog);
+void inline OutControlReset();
 
-enum CurrentProtectionState_t {
+enum outControlState_t {
   STATE_START,
   STATE_NABEH,
   STATE_NORMAL,
@@ -32,8 +33,7 @@ enum CurrentProtectionState_t {
 };
 
 uint16_t analogPrepeti = 0;
-uint16_t analogProud = 0;
-bool stavPinu = true;
+uint16_t analogVystupniNapeti = 0;
 uint64_t timeCounter = 0;
 
 void setup() {
@@ -48,11 +48,13 @@ void setup() {
 
 void loop() {
   analogPrepeti = analogRead(A2);
-  analogProud = analogRead(A1);
+  analogVystupniNapeti = analogRead(A1);
 
-  stavPinu = VoltageControl(analogPrepeti) | CurrentProtection(analogProud);
+  bool stavNapeti = VoltageControl(analogPrepeti);
+  if (stavNapeti) OutControlReset();
+  bool stavVystupnihoNapeti = outControl(analogVystupniNapeti);
 
-  digitalWrite(1, stavPinu);
+  digitalWrite(1, stavNapeti | stavVystupnihoNapeti);
 
   wdt_reset();
 }
@@ -82,10 +84,11 @@ bool VoltageControl(uint16_t analog) {
   return out;
 }
 
-bool CurrentProtection(uint16_t analog) {
+static outControlState_t stateNow = STATE_START;
+
+bool outControl(uint16_t analog) {
   static uint8_t resetAccumulator = 0;
   static bool out = true;
-  static CurrentProtectionState_t stateNow = STATE_START;
 
   switch (stateNow) {
   case STATE_START:
@@ -108,9 +111,8 @@ bool CurrentProtection(uint16_t analog) {
     timeCounter = 0;
     out = false;
 
-    if (analog < (PROUD_HRANICE) - (PROUD_HYSTEREZE)) {
+    if (analog < (VYSTUPNI_NAPETI_HRANICE) - (VYSTUPNI_NAPETI_HYSTEREZE)) {
       stateNow = STATE_CEKA;
-      timeCounter = 0;
     }
     break;
     
@@ -134,7 +136,7 @@ bool CurrentProtection(uint16_t analog) {
       timeCounter = 0;
       resetAccumulator += 1;
     }
-    else if (analog > (PROUD_HRANICE) + (PROUD_HYSTEREZE)) {
+    else if (analog > (VYSTUPNI_NAPETI_HRANICE) + (VYSTUPNI_NAPETI_HYSTEREZE)) {
       stateNow = STATE_NORMAL;
       resetAccumulator += 1;
     }
@@ -156,7 +158,7 @@ bool CurrentProtection(uint16_t analog) {
     if (timeCounter > 3000) { // magic number is 3 seconds
       stateNow = STATE_CHYBA;
     }
-    else if (analog > (PROUD_HRANICE) + (PROUD_HYSTEREZE)) {
+    else if (analog > (VYSTUPNI_NAPETI_HRANICE) + (VYSTUPNI_NAPETI_HYSTEREZE)) {
       stateNow = STATE_NORMAL;
     }
     break;
@@ -174,6 +176,10 @@ bool CurrentProtection(uint16_t analog) {
   }
 
   return out;
+}
+
+void inline OutControlReset() {
+  stateNow = STATE_START;
 }
 
 ISR(TIM0_COMPA_vect) { // add one each milliseconds (not using millis as they are only 32 bit)
